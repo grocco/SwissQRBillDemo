@@ -144,6 +144,12 @@ paths:
       responses:
         '200':
           description: "QR bill as SVG or PDF"
+          headers:
+            Cache-Control:
+              description: "Caching policy for the response"
+              schema:
+                type: string
+                example: "public, max-age=31536000, immutable"  
           content:
             image/svg+xml:
               schema:

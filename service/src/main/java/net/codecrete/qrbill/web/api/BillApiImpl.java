@@ -6,20 +6,29 @@
 //
 package net.codecrete.qrbill.web.api;
 
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Locale;
+
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import net.codecrete.qrbill.generator.*;
+import net.codecrete.qrbill.generator.Bill;
+import net.codecrete.qrbill.generator.GraphicsFormat;
+import net.codecrete.qrbill.generator.Language;
+import net.codecrete.qrbill.generator.MultilingualText;
+import net.codecrete.qrbill.generator.OutputSize;
+import net.codecrete.qrbill.generator.QRBill;
+import net.codecrete.qrbill.generator.QRBillValidationError;
+import net.codecrete.qrbill.generator.SeparatorType;
+import net.codecrete.qrbill.generator.ValidationResult;
 import net.codecrete.qrbill.web.model.QrBill;
 import net.codecrete.qrbill.web.model.QrCodeInformation;
 import net.codecrete.qrbill.web.model.ValidationMessage;
 import net.codecrete.qrbill.web.model.ValidationResponse;
-import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Locale;
 
 @ApplicationScoped
 public class BillApiImpl implements BillApi {
@@ -81,7 +90,9 @@ public class BillApiImpl implements BillApi {
 
         byte[] result = QRBill.generate(bill);
         MediaType contentType = getContentType(bill.getFormat().getGraphicsFormat());
-        return Response.ok(result, contentType).build();
+        return Response.ok(result, contentType)
+                .header("Cache-Control", "public, max-age=31536000, immutable")
+                .build();
     }
 
     @Override
@@ -107,8 +118,7 @@ public class BillApiImpl implements BillApi {
 
         // Generate localized messages
         if (result.hasMessages()) {
-            List<ValidationMessage> messages
-                    = DtoConverter.toDtoValidationMessageList(result.getValidationMessages());
+            List<ValidationMessage> messages = DtoConverter.toDtoValidationMessageList(result.getValidationMessages());
             messageLocalizer.translateMessages(messages, httpHeaders);
             response.setValidationMessages(messages);
         } else {
@@ -123,7 +133,6 @@ public class BillApiImpl implements BillApi {
             response.setQrCodeText(qrCodeText);
             response.setBillID(BillId.generate(qrCodeText, DtoConverter.toDtoBillFormat(validatedBill.getFormat())));
         }
-
         return response;
     }
 
@@ -207,7 +216,7 @@ public class BillApiImpl implements BillApi {
     }
 
     private static MediaType getContentType(GraphicsFormat graphicsFormat) {
-        return switch(graphicsFormat) {
+        return switch (graphicsFormat) {
             case SVG -> MEDIA_TYPE_IMAGE_SVG;
             case PDF -> MEDIA_TYPE_APPLICATION_PDF;
             case PNG -> MEDIA_TYPE_IMAGE_PNG;
@@ -235,13 +244,13 @@ public class BillApiImpl implements BillApi {
 
     @ServerExceptionMapper
     public Response mapException(QRBillValidationError ex) {
-        List<ValidationMessage> messages
-                = DtoConverter.toDtoValidationMessageList(ex.getValidationResult().getValidationMessages());
+        List<ValidationMessage> messages = DtoConverter
+                .toDtoValidationMessageList(ex.getValidationResult().getValidationMessages());
         messageLocalizer.translateMessages(messages, httpHeaders);
         return Response
-            .status(422, "Unprocessable Entity")
-            .entity(messages)
-            .type(MediaType.APPLICATION_JSON)
-            .build();
+                .status(422, "Unprocessable Entity")
+                .entity(messages)
+                .type(MediaType.APPLICATION_JSON)
+                .build();
     }
 }
